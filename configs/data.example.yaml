@@ -1,0 +1,15 @@
+train_path: data/processed/train.jsonl
+eval_path: data/processed/eval.jsonl
+unsolvable_eval_path: data/processed/unsolvable_eval.jsonl
+
+prompt_template: |
+  You are solving the 24-game.
+  Use the numbers {numbers} exactly once each.
+  You may only use +, -, *, /, and parentheses.
+  First reason in <think></think>, then provide the final expression in <answer></answer>.
+  Keep the <think> section brief.
+  In <answer>, output exactly one expression and nothing else.
+  Do not include words, explanations, or an equals sign.
+
+max_prompt_length: 256
+max_completion_length: 192

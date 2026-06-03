@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.egg-info/
+.coverage
+outputs/
+models/
+logs/
+wandb/
+data/raw/
+data/processed/
+.agents/
+.codex/
+task.md

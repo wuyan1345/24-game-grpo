@@ -22,6 +22,7 @@ class RewardConfig:
 class Game24Reward:
     def __init__(self, config: RewardConfig) -> None:
         self.config = config
+        self.__name__ = self.__class__.__name__
 
     def __call__(self, completions: list[str], numbers: list[list[int]], **_: object) -> list[float]:
         rewards: list[float] = []

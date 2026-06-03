@@ -40,6 +40,7 @@ class TrainConfig:
     model_name: str
     output_dir: str
     bf16: bool = True
+    max_steps: int | None = None
     learning_rate: float = 1e-6
     weight_decay: float = 0.01
     warmup_ratio: float = 0.03
@@ -51,6 +52,7 @@ class TrainConfig:
     per_device_train_batch_size: int = 1
     gradient_accumulation_steps: int = 4
     num_generations: int = 4
+    generation_batch_size: int | None = None
     max_prompt_length: int = 256
     max_completion_length: int = 192
     beta: float = 0.04

@@ -3,6 +3,7 @@ from game24_grpo.cli.build_data import (
     normalize_nlile_row,
     normalize_tot_row,
     prepare_splits,
+    split_generated_records,
 )
 
 
@@ -35,7 +36,7 @@ def test_normalize_tot_row_parses_percentage() -> None:
     assert record.metadata["solved_rate"] == 0.805
 
 
-def test_prepare_splits_excludes_eval_holdout_from_train() -> None:
+def test_prepare_splits_keeps_all_nlile_solvable_and_tracks_remaining_tot_nonoverlap() -> None:
     nlile_records = [
         normalize_nlile_row(
             {
@@ -66,6 +67,23 @@ def test_prepare_splits_excludes_eval_holdout_from_train() -> None:
     splits = prepare_splits(nlile_records, tot_records, hard_start_index=1, hard_end_index=2)
     train_keys = {record.puzzle_key for record in splits["train"]}
     eval_keys = {record.puzzle_key for record in splits["eval"]}
+    nonoverlap_keys = {record.puzzle_key for record in splits["tot_nonoverlap"]}
     assert canonical_key([4, 4, 10, 10]) in eval_keys
-    assert canonical_key([4, 4, 10, 10]) not in train_keys
     assert canonical_key([1, 1, 2, 6]) in train_keys
+    assert canonical_key([4, 4, 10, 10]) in train_keys
+    assert canonical_key([1, 1, 2, 6]) not in nonoverlap_keys
+    assert canonical_key([4, 4, 10, 10]) not in nonoverlap_keys
+
+
+def test_split_generated_records_holds_out_eval_subset_deterministically() -> None:
+    records = [
+        normalize_nlile_row({"numbers": [1, 1, 2, 6], "solutions": ["a"], "solvable": True}),
+        normalize_nlile_row({"numbers": [1, 1, 3, 8], "solutions": ["a"], "solvable": True}),
+        normalize_nlile_row({"numbers": [1, 1, 4, 8], "solutions": ["a"], "solvable": True}),
+        normalize_nlile_row({"numbers": [3, 3, 8, 8], "solutions": [], "solvable": False}),
+    ]
+    splits = split_generated_records(records, eval_size=2, seed=123)
+    assert len(splits["train"]) == 1
+    assert len(splits["eval"]) == 2
+    assert len(splits["unsolvable_eval"]) == 1
+    assert splits["tot_nonoverlap"] == []

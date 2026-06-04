@@ -9,25 +9,25 @@ description = "GRPO training scaffold for the 24-game task"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "datasets>=2.21.0",
-  "huggingface-hub>=0.24.0",
-  "pyyaml>=6.0.1",
-  "sympy>=1.13.0",
-  "torch>=2.3.0",
-  "transformers>=4.44.0",
-  "trl>=0.10.1",
+  "datasets",
+  "huggingface-hub",
+  "pyyaml",
+  "sympy",
+  "torch>=2.0.0",
+  "transformers",
+  "trl",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.2.0",
-  "ruff>=0.5.0",
+  "pytest",
+  "ruff",
 ]
 
 [project.scripts]
 game24-build-data = "game24_grpo.cli.build_data:main"
 game24-eval = "game24_grpo.cli.evaluate:main"
-game24-train-grpo = "game24_grpo.cli.train_grpo:main"
+game24-train = "game24_grpo.cli.train_grpo:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -3,8 +3,9 @@ eval_path: data/processed/eval.jsonl
 unsolvable_eval_path: data/processed/unsolvable_eval.jsonl
 
 prompt_template: |
-  You are solving the 24-game.
+  You are solving an arithmetic puzzle.
   Use the numbers {numbers} exactly once each.
+  Your goal is to make {target}.
   You may only use +, -, *, /, and parentheses.
   First reason in <think></think>, then provide the final expression in <answer></answer>.
   Keep the <think> section brief.

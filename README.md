@@ -19,11 +19,53 @@ Target output format:
 pip install -e .[dev]
 ```
 
-Build or rebuild processed data:
+If direct Hugging Face access is unavailable, you can use a mirror for model downloads:
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+Then download the model snapshot locally:
+
+```bash
+hf download Qwen/Qwen2.5-1.5B-Instruct \
+  --local-dir models/qwen25-1.5b-instruct-hf
+```
+
+Build processed data from the remote datasets mentioned in `task.md`:
 
 ```bash
 PYTHONPATH=src python -m game24_grpo.cli.build_data \
-  --use-local-hard-eval \
+  --output-dir data/processed
+```
+
+This always produces:
+
+- `train.jsonl`: all `solvable=True` records from `nlile/24-game`
+- `eval.jsonl`: the 100 hard ToT records selected by `--hard-start-index/--hard-end-index`
+- `unsolvable_eval.jsonl`: all `solvable=False` records from `nlile/24-game`
+
+When available, the script also writes:
+
+- `tot_nonoverlap.jsonl`: the remaining ToT records that do not overlap with the `nlile` solvable training set
+
+The processed JSONL files are intentionally minimal and currently store only:
+
+- `numbers`
+- `target`
+- `solvable`
+
+If remote dataset access is unavailable, you can override the Hugging Face rows endpoint if your mirror provides one:
+
+```bash
+export HF_DATASETS_ROWS_URL=https://datasets-server.hf-mirror.com/rows
+```
+
+If you want to generate a local dataset for extension work, you can build the full 24-game space locally and split it automatically into train/eval:
+
+```bash
+PYTHONPATH=src python -m game24_grpo.cli.build_data \
+  --generate-local \
   --output-dir data/processed
 ```
 

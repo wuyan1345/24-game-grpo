@@ -51,28 +51,33 @@ def evaluate_model(
     limit: int | None = None,
     output_path: str | None = None,
 ) -> EvalMetrics:
+    print(f"[evaluate] loading dataset: {dataset_path}")
     dataset = load_jsonl_dataset(dataset_path, prompt_template)
     if limit is not None:
         dataset = dataset.select(range(min(limit, len(dataset))))
+    print(f"[evaluate] dataset ready: {len(dataset)} rows")
 
+    print(f"[evaluate] loading tokenizer: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     device = _infer_device()
+    print(f"[evaluate] loading model on {device}")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
         trust_remote_code=True,
     ).to(device)
     model.eval()
+    print("[evaluate] starting generation loop")
 
     solved = 0
     format_pass = 0
     valid_expression = 0
     hallucinations = 0
     rows: list[dict[str, Any]] = []
-    for row in dataset:
+    for index, row in enumerate(dataset, start=1):
         inputs = _prepare_model_inputs(row["prompt"], tokenizer, device)
         with torch.no_grad():
             output = model.generate(
@@ -102,6 +107,8 @@ def evaluate_model(
                 "error": verification.error,
             }
         )
+        if index % 10 == 0 or index == len(dataset):
+            print(f"[evaluate] processed {index}/{len(dataset)} examples")
 
     total = len(dataset)
     metrics = EvalMetrics(
@@ -124,4 +131,5 @@ def evaluate_model(
         with output_file.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, ensure_ascii=True)
             handle.write("\n")
+        print(f"[evaluate] saved results to {output_file}")
     return metrics

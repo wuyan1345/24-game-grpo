@@ -8,8 +8,9 @@ import yaml
 
 
 DEFAULT_PROMPT_TEMPLATE = (
-    "You are solving the 24-game.\n"
+    "You are solving an arithmetic puzzle.\n"
     "Use the numbers {numbers} exactly once each.\n"
+    "Your goal is to make {target}.\n"
     "You may only use +, -, *, /, and parentheses.\n"
     "First reason in <think></think>, then provide the final expression in <answer></answer>.\n"
     "Keep the <think> section brief.\n"

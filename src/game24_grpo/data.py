@@ -14,14 +14,13 @@ def load_jsonl_dataset(path: str | Path, prompt_template: str) -> Dataset:
         for line in handle:
             raw = json.loads(line)
             numbers = raw["numbers"]
+            target = raw.get("target", 24)
             records.append(
                 {
-                    "prompt": build_prompt(numbers=numbers, prompt_template=prompt_template),
+                    "prompt": build_prompt(numbers=numbers, target=target, prompt_template=prompt_template),
                     "numbers": numbers,
-                    "target": raw.get("target", 24),
+                    "target": target,
                     "solvable": raw.get("solvable", True),
-                    "reference_solution": raw.get("reference_solution"),
-                    "source": raw.get("source"),
                 }
             )
     return Dataset.from_list(records)

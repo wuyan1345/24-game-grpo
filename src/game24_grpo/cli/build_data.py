@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
+import os
+import random
 from dataclasses import asdict, dataclass
 from itertools import combinations_with_replacement
 from pathlib import Path
@@ -15,8 +16,7 @@ from game24_grpo.solver import solve_24
 DEFAULT_NLILE_DATASET = "nlile/24-game"
 DEFAULT_TOT_DATASET = "test-time-compute/game-of-24"
 DEFAULT_DATASET_CONFIG = "default"
-ROWS_API_URL = "https://datasets-server.huggingface.co/rows"
-TOT_HARD_EVAL_PATH = Path(__file__).resolve().parent.parent / "assets" / "tot_hard_eval.csv"
+ROWS_API_URL = os.environ.get("HF_DATASETS_ROWS_URL", "https://datasets-server.huggingface.co/rows")
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,10 @@ class PreparedRecord:
     source: str
     puzzle_key: str
     metadata: dict[str, Any]
+
+
+def _log(message: str) -> None:
+    print(f"[build-data] {message}")
 
 
 def parse_numbers(value: Any) -> list[int]:
@@ -103,7 +107,11 @@ def normalize_tot_row(row: dict[str, Any]) -> PreparedRecord:
 
 
 def serialize_record(record: PreparedRecord) -> dict[str, Any]:
-    return asdict(record)
+    return {
+        "numbers": record.numbers,
+        "target": record.target,
+        "solvable": record.solvable,
+    }
 
 
 def write_jsonl(path: Path, records: list[PreparedRecord]) -> None:
@@ -113,19 +121,13 @@ def write_jsonl(path: Path, records: list[PreparedRecord]) -> None:
             handle.write(json.dumps(serialize_record(record), ensure_ascii=True) + "\n")
 
 
-def write_summary(path: Path, summary: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(summary, handle, indent=2, ensure_ascii=True)
-        handle.write("\n")
-
-
 def fetch_dataset_rows(
     dataset: str,
     config: str,
     split: str,
     batch_size: int = 100,
 ) -> list[dict[str, Any]]:
+    _log(f"fetching rows: dataset={dataset}, config={config}, split={split}")
     offset = 0
     all_rows: list[dict[str, Any]] = []
     while True:
@@ -144,24 +146,12 @@ def fetch_dataset_rows(
         rows = [item["row"] for item in payload.get("rows", [])]
         all_rows.extend(rows)
         offset += len(rows)
+        _log(f"fetched {offset} rows from {dataset}")
 
         total = payload.get("num_rows_total")
         if not rows or (isinstance(total, int) and offset >= total):
             break
     return all_rows
-
-
-def load_rows_from_json(path: str | Path) -> list[dict[str, Any]]:
-    with Path(path).open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-    if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict) and isinstance(payload.get("rows"), list):
-        rows = payload["rows"]
-        if rows and isinstance(rows[0], dict) and "row" in rows[0]:
-            return [item["row"] for item in rows]
-        return rows
-    raise ValueError(f"unsupported row dump format: {path}")
 
 
 def load_remote_datasets(
@@ -172,6 +162,7 @@ def load_remote_datasets(
     nlile_split: str,
     tot_split: str,
 ) -> tuple[list[PreparedRecord], list[PreparedRecord]]:
+    _log("loading remote datasets from Hugging Face rows API")
     nlile_rows = fetch_dataset_rows(dataset=nlile_dataset, config=nlile_config, split=nlile_split)
     tot_rows = fetch_dataset_rows(dataset=tot_dataset, config=tot_config, split=tot_split)
     nlile_records = [normalize_nlile_row(row) for row in nlile_rows]
@@ -180,30 +171,10 @@ def load_remote_datasets(
     return nlile_records, tot_records
 
 
-def load_prepared_source_rows(
-    nlile_rows_json: str | Path,
-    tot_rows_json: str | Path,
-) -> tuple[list[PreparedRecord], list[PreparedRecord]]:
-    nlile_rows = load_rows_from_json(nlile_rows_json)
-    tot_rows = load_rows_from_json(tot_rows_json)
-    nlile_records = [normalize_nlile_row(row) for row in nlile_rows]
-    tot_records = [normalize_tot_row(row) for row in tot_rows]
-    tot_records.sort(key=lambda item: int(item.metadata["rank"]))
-    return nlile_records, tot_records
-
-
-def load_tot_hard_eval_rows(path: str | Path = TOT_HARD_EVAL_PATH) -> list[PreparedRecord]:
-    records: list[PreparedRecord] = []
-    with Path(path).open("r", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            records.append(normalize_tot_row(dict(row)))
-    return records
-
-
 def generate_full_game24_records() -> list[PreparedRecord]:
+    _log("generating full 24-game space locally")
     records: list[PreparedRecord] = []
-    for numbers_tuple in combinations_with_replacement(range(1, 14), 4):
+    for index, numbers_tuple in enumerate(combinations_with_replacement(range(1, 14), 4), start=1):
         numbers = list(numbers_tuple)
         solution = solve_24(numbers)
         records.append(
@@ -218,7 +189,29 @@ def generate_full_game24_records() -> list[PreparedRecord]:
                 metadata={},
             )
         )
+        if index % 250 == 0:
+            _log(f"generated {index} combinations")
     return records
+
+
+def split_generated_records(
+    records: list[PreparedRecord],
+    eval_size: int,
+    seed: int,
+) -> dict[str, list[PreparedRecord]]:
+    solvable_records = [record for record in records if record.solvable]
+    unsolvable_records = [record for record in records if not record.solvable]
+    shuffled = list(solvable_records)
+    random.Random(seed).shuffle(shuffled)
+    actual_eval_size = min(eval_size, len(shuffled))
+    eval_records = shuffled[:actual_eval_size]
+    train_records = shuffled[actual_eval_size:]
+    return {
+        "train": train_records,
+        "eval": eval_records,
+        "unsolvable_eval": unsolvable_records,
+        "tot_nonoverlap": [],
+    }
 
 
 def select_holdout_records(
@@ -241,55 +234,22 @@ def prepare_splits(
 ) -> dict[str, list[PreparedRecord]]:
     hard_eval_records = select_holdout_records(tot_records, hard_start_index, hard_end_index)
     hard_eval_keys = {record.puzzle_key for record in hard_eval_records}
+    nlile_solvable_keys = {record.puzzle_key for record in nlile_records if record.solvable}
 
-    train_records = [
-        record
-        for record in nlile_records
-        if record.solvable and record.puzzle_key not in hard_eval_keys
-    ]
+    train_records = [record for record in nlile_records if record.solvable]
     unsolvable_records = [record for record in nlile_records if not record.solvable]
-    tot_nonoverlap_records = [record for record in tot_records if record.puzzle_key in hard_eval_keys]
+    tot_nonoverlap_records = [
+        record
+        for record in tot_records
+        if record.puzzle_key not in hard_eval_keys and record.puzzle_key not in nlile_solvable_keys
+    ]
 
     return {
         "train": train_records,
         "eval": hard_eval_records,
         "unsolvable_eval": unsolvable_records,
-        "tot_full": tot_records,
         "tot_nonoverlap": tot_nonoverlap_records,
     }
-
-
-def summarize_splits(
-    splits: dict[str, list[PreparedRecord]],
-    hard_start_index: int,
-    hard_end_index: int,
-) -> dict[str, Any]:
-    summary: dict[str, Any] = {
-        "hard_holdout": {
-            "start_index": hard_start_index,
-            "end_index_exclusive": hard_end_index,
-            "size": len(splits["eval"]),
-        },
-        "counts": {name: len(records) for name, records in splits.items()},
-    }
-    if splits["eval"]:
-        solved_rates = [
-            record.metadata.get("solved_rate")
-            for record in splits["eval"]
-            if isinstance(record.metadata.get("solved_rate"), float)
-        ]
-        ranks = [
-            int(record.metadata["rank"])
-            for record in splits["eval"]
-            if record.metadata.get("rank") is not None
-        ]
-        summary["eval_stats"] = {
-            "min_rank": min(ranks) if ranks else None,
-            "max_rank": max(ranks) if ranks else None,
-            "min_solved_rate": min(solved_rates) if solved_rates else None,
-            "max_solved_rate": max(solved_rates) if solved_rates else None,
-        }
-    return summary
 
 
 def main() -> None:
@@ -299,14 +259,12 @@ def main() -> None:
     parser.add_argument("--tot-dataset", default=DEFAULT_TOT_DATASET)
     parser.add_argument("--nlile-config", default=DEFAULT_DATASET_CONFIG)
     parser.add_argument("--tot-config", default=DEFAULT_DATASET_CONFIG)
-    parser.add_argument("--nlile-rows-json", help="Optional local JSON dump of nlile rows.")
-    parser.add_argument("--tot-rows-json", help="Optional local JSON dump of ToT rows.")
     parser.add_argument("--nlile-split", default="train")
     parser.add_argument("--tot-split", default="train")
     parser.add_argument(
-        "--use-local-hard-eval",
+        "--generate-local",
         action="store_true",
-        help="Use the bundled ToT hard-eval CSV and generate the full 24-game space algorithmically.",
+        help="Generate a local dataset algorithmically and split it into train/eval without using remote datasets.",
     )
     parser.add_argument(
         "--hard-start-index",
@@ -320,26 +278,41 @@ def main() -> None:
         default=1000,
         help="0-based exclusive end index for the Tree-of-Thoughts hard holdout.",
     )
+    parser.add_argument(
+        "--generated-eval-size",
+        type=int,
+        default=100,
+        help="Number of locally generated solvable records to hold out for eval.",
+    )
+    parser.add_argument(
+        "--generated-seed",
+        type=int,
+        default=42,
+        help="Random seed for deterministic local train/eval splitting.",
+    )
     args = parser.parse_args()
+    _log(f"starting dataset build: output_dir={args.output_dir}")
 
     output_dir = Path(args.output_dir)
-    if bool(args.nlile_rows_json) != bool(args.tot_rows_json):
-        raise ValueError("provide both --nlile-rows-json and --tot-rows-json together")
 
     hard_start_index = args.hard_start_index
     hard_end_index = args.hard_end_index
 
-    if args.use_local_hard_eval:
-        nlile_records = generate_full_game24_records()
-        tot_records = load_tot_hard_eval_rows()
-        hard_start_index = 0
-        hard_end_index = len(tot_records)
-    elif args.nlile_rows_json and args.tot_rows_json:
-        nlile_records, tot_records = load_prepared_source_rows(
-            nlile_rows_json=args.nlile_rows_json,
-            tot_rows_json=args.tot_rows_json,
+    if args.generate_local:
+        _log("using local generation mode")
+        generated_records = generate_full_game24_records()
+        _log(
+            f"splitting generated records with eval_size={args.generated_eval_size}, seed={args.generated_seed}"
         )
+        splits = split_generated_records(
+            generated_records,
+            eval_size=args.generated_eval_size,
+            seed=args.generated_seed,
+        )
+        hard_start_index = 0
+        hard_end_index = len(splits["eval"])
     else:
+        _log("using remote dataset mode")
         nlile_records, tot_records = load_remote_datasets(
             nlile_dataset=args.nlile_dataset,
             tot_dataset=args.tot_dataset,
@@ -348,23 +321,28 @@ def main() -> None:
             nlile_split=args.nlile_split,
             tot_split=args.tot_split,
         )
-    splits = prepare_splits(
-        nlile_records=nlile_records,
-        tot_records=tot_records,
-        hard_start_index=hard_start_index,
-        hard_end_index=hard_end_index,
+    if not args.generate_local:
+        _log(
+            f"source sizes: nlile={len(nlile_records)}, tot={len(tot_records)}, "
+            f"hard_range=[{hard_start_index}, {hard_end_index})"
+        )
+        splits = prepare_splits(
+            nlile_records=nlile_records,
+            tot_records=tot_records,
+            hard_start_index=hard_start_index,
+            hard_end_index=hard_end_index,
+        )
+    _log(
+        "writing splits: "
+        + ", ".join(f"{name}={len(records)}" for name, records in splits.items())
     )
 
     write_jsonl(output_dir / "train.jsonl", splits["train"])
     write_jsonl(output_dir / "eval.jsonl", splits["eval"])
     write_jsonl(output_dir / "unsolvable_eval.jsonl", splits["unsolvable_eval"])
-    if not args.use_local_hard_eval:
-        write_jsonl(output_dir / "tot_full.jsonl", splits["tot_full"])
-    write_jsonl(output_dir / "tot_nonoverlap.jsonl", splits["tot_nonoverlap"])
-    write_summary(
-        output_dir / "summary.json",
-        summarize_splits(splits, hard_start_index, hard_end_index),
-    )
+    if splits["tot_nonoverlap"]:
+        write_jsonl(output_dir / "tot_nonoverlap.jsonl", splits["tot_nonoverlap"])
+    _log("dataset build complete")
 
 
 if __name__ == "__main__":

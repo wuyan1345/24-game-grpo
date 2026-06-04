@@ -15,11 +15,16 @@ def main() -> None:
     parser.add_argument("--output", help="Optional path to save detailed JSON results.")
     parser.add_argument("--max-new-tokens", type=int, help="Optional override for generation length.")
     args = parser.parse_args()
+    print(f"[evaluate] loading data config: {args.data_config}")
 
     data_config = load_data_config(args.data_config)
     dataset_path = data_config.eval_path if args.split == "eval" else data_config.unsolvable_eval_path
     if dataset_path is None:
         raise ValueError(f"split {args.split} is not configured")
+    print(
+        f"[evaluate] starting evaluation: split={args.split}, model={args.model}, "
+        f"dataset={dataset_path}, limit={args.limit or 'all'}"
+    )
 
     metrics = evaluate_model(
         model_name=args.model,
@@ -29,6 +34,8 @@ def main() -> None:
         limit=args.limit,
         output_path=args.output,
     )
+    if args.output:
+        print(f"[evaluate] wrote detailed output: {args.output}")
     print(f"total={metrics.total}")
     print(f"solve_rate={metrics.solve_rate:.4f}")
     print(f"format_pass_rate={metrics.format_pass_rate:.4f}")

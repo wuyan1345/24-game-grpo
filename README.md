@@ -63,11 +63,6 @@ game24-eval \
   --split eval \
   --limit 20 \
   --max-new-tokens 192 \
-  --model models/qwen25-1.5b-instruct-hf \
-  --data-config configs/data.example.yaml \
-  --split eval \
-  --limit 20 \
-  --max-new-tokens 192 \
   --output outputs/baseline_eval_limit20_gpu.json
 ```
 

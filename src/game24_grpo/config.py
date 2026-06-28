@@ -40,7 +40,7 @@ class RewardWeights:
 class TrainConfig:
     model_name: str
     output_dir: str
-    bf16: bool = True
+    bf16: bool = False
     max_steps: int | None = None
     learning_rate: float = 1e-6
     weight_decay: float = 0.01

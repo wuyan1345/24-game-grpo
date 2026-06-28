@@ -214,6 +214,31 @@ def split_generated_records(
     }
 
 
+def generate_unsolvable_records(limit: int) -> list[PreparedRecord]:
+    if limit < 0:
+        raise ValueError("unsolvable fallback limit must be non-negative")
+    records: list[PreparedRecord] = []
+    for numbers_tuple in combinations_with_replacement(range(1, 14), 4):
+        numbers = list(numbers_tuple)
+        if solve_24(numbers) is not None:
+            continue
+        records.append(
+            PreparedRecord(
+                numbers=numbers,
+                target=24,
+                solvable=False,
+                reference_solution=None,
+                all_reference_solutions=[],
+                source="generated/unsolvable-24-combinations",
+                puzzle_key=canonical_key(numbers),
+                metadata={"fallback": True},
+            )
+        )
+        if len(records) >= limit:
+            break
+    return records
+
+
 def select_holdout_records(
     tot_records: list[PreparedRecord],
     hard_start_index: int,
@@ -231,6 +256,7 @@ def prepare_splits(
     tot_records: list[PreparedRecord],
     hard_start_index: int,
     hard_end_index: int,
+    min_unsolvable_eval_size: int = 100,
 ) -> dict[str, list[PreparedRecord]]:
     hard_eval_records = select_holdout_records(tot_records, hard_start_index, hard_end_index)
     hard_eval_keys = {record.puzzle_key for record in hard_eval_records}
@@ -238,6 +264,19 @@ def prepare_splits(
 
     train_records = [record for record in nlile_records if record.solvable]
     unsolvable_records = [record for record in nlile_records if not record.solvable]
+    if len(unsolvable_records) < min_unsolvable_eval_size:
+        existing_keys = {record.puzzle_key for record in unsolvable_records}
+        _log(
+            f"unsolvable_eval has {len(unsolvable_records)} rows; "
+            f"generating fallback rows to reach {min_unsolvable_eval_size}"
+        )
+        fallback_records = [
+            record
+            for record in generate_unsolvable_records(min_unsolvable_eval_size + len(existing_keys))
+            if record.puzzle_key not in existing_keys
+        ]
+        needed_fallback_rows = min_unsolvable_eval_size - len(unsolvable_records)
+        unsolvable_records.extend(fallback_records[:needed_fallback_rows])
     tot_nonoverlap_records = [
         record
         for record in tot_records
@@ -264,7 +303,10 @@ def main() -> None:
     parser.add_argument(
         "--generate-local",
         action="store_true",
-        help="Generate a local dataset algorithmically and split it into train/eval without using remote datasets.",
+        help=(
+            "Generate a local dataset algorithmically and split it into train/eval "
+            "without using remote datasets."
+        ),
     )
     parser.add_argument(
         "--hard-start-index",
@@ -290,6 +332,12 @@ def main() -> None:
         default=42,
         help="Random seed for deterministic local train/eval splitting.",
     )
+    parser.add_argument(
+        "--min-unsolvable-eval-size",
+        type=int,
+        default=100,
+        help="Minimum unsolvable eval rows; generated unsolvable puzzles fill any shortage.",
+    )
     args = parser.parse_args()
     _log(f"starting dataset build: output_dir={args.output_dir}")
 
@@ -302,7 +350,8 @@ def main() -> None:
         _log("using local generation mode")
         generated_records = generate_full_game24_records()
         _log(
-            f"splitting generated records with eval_size={args.generated_eval_size}, seed={args.generated_seed}"
+            "splitting generated records with "
+            f"eval_size={args.generated_eval_size}, seed={args.generated_seed}"
         )
         splits = split_generated_records(
             generated_records,
@@ -331,6 +380,7 @@ def main() -> None:
             tot_records=tot_records,
             hard_start_index=hard_start_index,
             hard_end_index=hard_end_index,
+            min_unsolvable_eval_size=args.min_unsolvable_eval_size,
         )
     _log(
         "writing splits: "

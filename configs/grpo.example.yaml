@@ -1,6 +1,6 @@
 model_name: Qwen/Qwen2.5-1.5B-Instruct
 output_dir: outputs/grpo-qwen25-15b
-bf16: true
+bf16: false
 learning_rate: 1.0e-6
 weight_decay: 0.01
 warmup_ratio: 0.03

@@ -1,10 +1,12 @@
 from game24_grpo.cli.build_data import (
     canonical_key,
+    generate_unsolvable_records,
     normalize_nlile_row,
     normalize_tot_row,
     prepare_splits,
     split_generated_records,
 )
+from game24_grpo.solver import solve_24
 
 
 def test_normalize_nlile_row_converts_symbols() -> None:
@@ -73,6 +75,38 @@ def test_prepare_splits_keeps_all_nlile_solvable_and_tracks_remaining_tot_nonove
     assert canonical_key([4, 4, 10, 10]) in train_keys
     assert canonical_key([1, 1, 2, 6]) not in nonoverlap_keys
     assert canonical_key([4, 4, 10, 10]) not in nonoverlap_keys
+
+
+def test_prepare_splits_generates_unsolvable_fallback_when_source_has_too_few() -> None:
+    nlile_records = [
+        normalize_nlile_row(
+            {
+                "numbers": [4, 4, 10, 10],
+                "solutions": ["(10*10-4)/4"],
+                "solvable": True,
+            }
+        )
+    ]
+    tot_records = [
+        normalize_tot_row({"Rank": 1, "Puzzles": "4 4 10 10", "Solved rate": "85.0%"}),
+    ]
+    splits = prepare_splits(
+        nlile_records,
+        tot_records,
+        hard_start_index=0,
+        hard_end_index=1,
+        min_unsolvable_eval_size=5,
+    )
+    assert len(splits["unsolvable_eval"]) == 5
+    assert all(record.solvable is False for record in splits["unsolvable_eval"])
+    assert all(solve_24(record.numbers) is None for record in splits["unsolvable_eval"])
+
+
+def test_generate_unsolvable_records_returns_requested_unsolvable_prefix() -> None:
+    records = generate_unsolvable_records(3)
+    assert len(records) == 3
+    assert all(record.source == "generated/unsolvable-24-combinations" for record in records)
+    assert all(solve_24(record.numbers) is None for record in records)
 
 
 def test_split_generated_records_holds_out_eval_subset_deterministically() -> None:

@@ -101,7 +101,7 @@ Sampling or best-of-N evaluation is available for test-time compute:
 
 ```bash
 game24-eval \
-  --model outputs/grpo-qwen25-15b-pilot/checkpoint-20 \
+  --model outputs/grpo-qwen25-15b-pilot/checkpoint-10 \
   --data-config configs/data.example.yaml \
   --split eval \
   --dtype float32 \
@@ -128,7 +128,7 @@ Evaluate the pilot adapter checkpoint:
 
 ```bash
 HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-eval \
-  --model outputs/grpo-qwen25-15b-pilot/checkpoint-20 \
+  --model outputs/grpo-qwen25-15b-pilot/checkpoint-10 \
   --data-config configs/data.example.yaml \
   --split eval \
   --dtype float32 \
@@ -142,7 +142,7 @@ For the required unsolvable false-positive check:
 
 ```bash
 HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-eval \
-  --model outputs/grpo-qwen25-15b-pilot/checkpoint-20 \
+  --model outputs/grpo-qwen25-15b-pilot/checkpoint-10 \
   --data-config configs/data.example.yaml \
   --split unsolvable_eval \
   --dtype float32 \

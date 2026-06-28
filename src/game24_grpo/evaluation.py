@@ -45,6 +45,40 @@ def _resolve_torch_dtype(dtype: str, device: str) -> torch.dtype:
     raise ValueError(f"unsupported dtype: {dtype}")
 
 
+def _load_model(model_name: str, torch_dtype: torch.dtype):
+    model_path = Path(model_name)
+    adapter_config_path = model_path / "adapter_config.json"
+    if adapter_config_path.exists():
+        try:
+            from peft import PeftConfig, PeftModel
+        except ImportError as exc:
+            raise ImportError("Evaluating a LoRA adapter checkpoint requires 'peft'.") from exc
+        peft_config = PeftConfig.from_pretrained(model_name)
+        base_model = AutoModelForCausalLM.from_pretrained(
+            peft_config.base_model_name_or_path,
+            torch_dtype=torch_dtype,
+            trust_remote_code=True,
+        )
+        return PeftModel.from_pretrained(base_model, model_name)
+
+    return AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch_dtype,
+        trust_remote_code=True,
+    )
+
+
+def _resolve_tokenizer_name(model_name: str) -> str:
+    adapter_config_path = Path(model_name) / "adapter_config.json"
+    if not adapter_config_path.exists():
+        return model_name
+    try:
+        from peft import PeftConfig
+    except ImportError as exc:
+        raise ImportError("Evaluating a LoRA adapter checkpoint requires 'peft'.") from exc
+    return PeftConfig.from_pretrained(model_name).base_model_name_or_path
+
+
 def _build_generation_prompt(prompt: str, tokenizer: AutoTokenizer) -> str:
     messages = [{"role": "user", "content": prompt}]
     try:
@@ -98,19 +132,16 @@ def evaluate_model(
         dataset = dataset.select(range(min(limit, len(dataset))))
     print(f"[evaluate] dataset ready: {len(dataset)} rows")
 
-    print(f"[evaluate] loading tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    tokenizer_name = _resolve_tokenizer_name(model_name)
+    print(f"[evaluate] loading tokenizer: {tokenizer_name}")
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     device = _infer_device()
     torch_dtype = _resolve_torch_dtype(dtype, device)
     print(f"[evaluate] loading model on {device} with dtype={torch_dtype}")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch_dtype,
-        trust_remote_code=True,
-    ).to(device)
+    model = _load_model(model_name, torch_dtype).to(device)
     model.eval()
     print("[evaluate] starting generation loop")
 

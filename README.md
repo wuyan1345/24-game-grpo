@@ -1,6 +1,7 @@
 # 24-Game GRPO
 
-This repository trains and evaluates `Qwen/Qwen2.5-1.5B-Instruct` for the 24-point game with verifiable rewards and GRPO.
+This repository trains and evaluates `Qwen/Qwen2.5-1.5B-Instruct` for the 24-point
+game with verifiable rewards and GRPO.
 
 Expected response format:
 
@@ -8,7 +9,9 @@ Expected response format:
 <think>...</think><answer>...</answer>
 ```
 
-The `<answer>` content must be only one arithmetic expression using the four input numbers exactly once, operators `+ - * /`, and parentheses. The verifier checks syntax, number use, and whether the expression evaluates to 24 within `1e-6`.
+The `<answer>` content must be only one arithmetic expression using the four input
+numbers exactly once, operators `+ - * /`, and parentheses. The verifier checks
+syntax, number use, and whether the expression evaluates to 24 within `1e-6`.
 
 ## Setup
 
@@ -18,7 +21,10 @@ Install dependencies on the remote GPU server from inside this repository:
 python -m pip install -e ".[dev]"
 ```
 
-The current server notes use a P100 GPU, so examples default to FP32. Avoid BF16/FP16 on that server unless the hardware changes and a smoke evaluation proves generation is normal.
+The current server notes use a P100 GPU. Evaluation defaults to FP32 because FP16
+generation was observed to produce invalid repeated punctuation on this hardware.
+The first GRPO pilot uses FP16 LoRA to fit memory, then evaluates the saved adapter
+with FP32.
 
 If direct Hugging Face access is unavailable:
 
@@ -28,11 +34,11 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 ## Data
 
-The committed processed files are:
+The processed files are:
 
 - `data/processed/train.jsonl`: solvable training examples.
-- `data/processed/eval.jsonl`: Tree-of-Thoughts hard holdout, indices 900-1000 from `test-time-compute/game-of-24`.
-- `data/processed/unsolvable_eval.jsonl`: unsolvable examples when available.
+- `data/processed/eval.jsonl`: Tree-of-Thoughts hard holdout, indices 900-1000.
+- `data/processed/unsolvable_eval.jsonl`: unsolvable examples or generated fallback.
 
 Rebuild from Hugging Face datasets:
 
@@ -48,7 +54,7 @@ game24-build-data --generate-local --output-dir data/processed
 
 ## Evaluation
 
-Run the untrained Qwen baseline once before any GRPO training. Save detailed JSON results under `outputs/results/`:
+Run the untrained Qwen baseline once before any GRPO training:
 
 ```bash
 HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-eval \
@@ -72,10 +78,11 @@ HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-eval \
   --dtype float32 \
   --max-new-tokens 192 \
   --experiment-id base_unsolvable_qwen25_15b_fp32 \
-  --difficulty-filter "nlile solvable=False"
+  --difficulty-filter "nlile solvable=False or generated unsolvable fallback"
 ```
 
-Result JSON records include experiment metadata, generation settings, aggregate metrics, and per-example completions/verifier details. Default filenames use:
+Result JSON records include experiment metadata, generation settings, aggregate
+metrics, and per-example completions/verifier details. Default filenames use:
 
 ```text
 outputs/results/<YYYYMMDD_HHMMSS>_<experiment_id>.json
@@ -94,26 +101,59 @@ Sampling or best-of-N evaluation is available for test-time compute:
 
 ```bash
 game24-eval \
-  --model outputs/grpo-qwen25-15b/checkpoint-final \
+  --model outputs/grpo-qwen25-15b-pilot/checkpoint-20 \
   --data-config configs/data.example.yaml \
   --split eval \
   --dtype float32 \
   --temperature 0.7 \
   --top-p 0.95 \
   --num-samples 8 \
-  --experiment-id grpo_best_of_8_hard
+  --trained \
+  --baseline-type grpo_lora_pilot \
+  --experiment-id grpo_lora_pilot_best_of_8_hard
 ```
 
 ## Training
 
-Do not start GRPO until the base FP32 evaluation has been run, logged, and explicitly approved for training.
-
-After approval, run a short GRPO pilot:
+The base FP32 evaluation has been run and logged. Start with the short LoRA GRPO
+pilot:
 
 ```bash
 HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-train \
-  --config configs/grpo.example.yaml \
+  --config configs/grpo.pilot.yaml \
   --data-config configs/data.example.yaml
 ```
 
-`configs/grpo.example.yaml` sets `bf16: false` for the current P100 server. Keep checkpoints and large run artifacts under `outputs/` or `runs/`, and commit only code, configs, scripts, and lightweight metric summaries unless large artifacts are explicitly requested.
+Evaluate the pilot adapter checkpoint:
+
+```bash
+HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-eval \
+  --model outputs/grpo-qwen25-15b-pilot/checkpoint-20 \
+  --data-config configs/data.example.yaml \
+  --split eval \
+  --dtype float32 \
+  --max-new-tokens 192 \
+  --trained \
+  --baseline-type grpo_lora_pilot \
+  --experiment-id grpo_lora_pilot_hard_fp32
+```
+
+For the required unsolvable false-positive check:
+
+```bash
+HF_ENDPOINT=https://hf-mirror.com PYTHONUNBUFFERED=1 game24-eval \
+  --model outputs/grpo-qwen25-15b-pilot/checkpoint-20 \
+  --data-config configs/data.example.yaml \
+  --split unsolvable_eval \
+  --dtype float32 \
+  --max-new-tokens 192 \
+  --trained \
+  --baseline-type grpo_lora_pilot \
+  --experiment-id grpo_lora_pilot_unsolvable_fp32
+```
+
+`configs/grpo.example.yaml` keeps full-model GRPO settings, while
+`configs/grpo.pilot.yaml` is the memory-conscious P100 pilot. Keep checkpoints and
+large run artifacts under `outputs/` or `runs/`, and commit only code, configs,
+scripts, and lightweight metric summaries unless large artifacts are explicitly
+requested.

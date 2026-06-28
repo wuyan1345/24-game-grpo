@@ -31,9 +31,30 @@ class DataConfig:
 
 @dataclass
 class RewardWeights:
-    format: float = 0.1
-    valid_expression: float = 0.2
-    correct: float = 1.0
+    format: float = 0.05
+    valid_expression: float = 0.15
+    proximity: float = 0.15
+    correct: float = 2.0
+    number_mismatch_penalty: float = -1.0
+
+
+@dataclass
+class LoraConfig:
+    enabled: bool = False
+    r: int = 16
+    alpha: int = 32
+    dropout: float = 0.05
+    target_modules: list[str] = field(
+        default_factory=lambda: [
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ]
+    )
 
 
 @dataclass
@@ -41,6 +62,8 @@ class TrainConfig:
     model_name: str
     output_dir: str
     bf16: bool = False
+    fp16: bool = False
+    gradient_checkpointing: bool = False
     max_steps: int | None = None
     learning_rate: float = 1e-6
     weight_decay: float = 0.01
@@ -59,8 +82,12 @@ class TrainConfig:
     beta: float = 0.04
     temperature: float = 0.8
     top_p: float = 0.95
+    optim: str = "adamw_torch"
+    torch_dtype: str | None = None
+    train_limit: int | None = None
     report_to: list[str] = field(default_factory=lambda: ["none"])
     reward_weights: RewardWeights = field(default_factory=RewardWeights)
+    lora: LoraConfig = field(default_factory=LoraConfig)
 
 
 def _load_yaml(path: str | Path) -> dict[str, Any]:
@@ -76,4 +103,9 @@ def load_data_config(path: str | Path) -> DataConfig:
 def load_train_config(path: str | Path) -> TrainConfig:
     payload = _load_yaml(path)
     reward_weights = payload.pop("reward_weights", {})
-    return TrainConfig(reward_weights=RewardWeights(**reward_weights), **payload)
+    lora = payload.pop("lora", {})
+    return TrainConfig(
+        reward_weights=RewardWeights(**reward_weights),
+        lora=LoraConfig(**lora),
+        **payload,
+    )

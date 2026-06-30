@@ -46,3 +46,9 @@ def test_reward_does_not_reward_malformed_expression_as_valid() -> None:
 def test_reward_missing_format_can_still_penalize_number_mismatch() -> None:
     score = _reward("<answer>10 + 10 + 5 - 1</answer>", [4, 4, 10, 10])
     assert score == RewardConfig().number_mismatch_penalty
+
+
+def test_reward_can_penalize_missing_answer_tag() -> None:
+    reward = Game24Reward(RewardConfig(missing_answer_penalty=-0.5))
+    score = reward(["<Answer>(10 * 10 - 4) / 4</Answer>"], [[4, 4, 10, 10]])[0]
+    assert score == -0.5

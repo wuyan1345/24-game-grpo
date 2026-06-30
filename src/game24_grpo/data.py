@@ -21,6 +21,9 @@ def load_jsonl_dataset(path: str | Path, prompt_template: str) -> Dataset:
                     "numbers": numbers,
                     "target": target,
                     "solvable": raw.get("solvable", True),
+                    "source": raw.get("source", ""),
+                    "puzzle_key": raw.get("puzzle_key", ""),
+                    "metadata": raw.get("metadata", {}),
                 }
             )
     return Dataset.from_list(records)

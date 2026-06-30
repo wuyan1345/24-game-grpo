@@ -1,0 +1,22 @@
+train_path: data/processed/train.jsonl
+eval_path: data/processed/eval.jsonl
+unsolvable_eval_path: data/processed/unsolvable_eval.jsonl
+tot_nonoverlap_path: data/processed/tot_nonoverlap.jsonl
+
+prompt_template: |
+  Solve this 24-game puzzle.
+  Numbers: {numbers}
+  Target: {target}
+
+  Rules:
+  - Use each given number exactly once.
+  - Do not use any other number.
+  - Use only +, -, *, /, and parentheses.
+  - The final expression must evaluate to exactly 24.
+  - Output tags must be exactly lowercase: <think>...</think><answer>...</answer>.
+  - Uppercase tags such as <Answer> are invalid.
+
+  Keep reasoning brief. Put exactly one arithmetic expression inside <answer>.
+
+max_prompt_length: 256
+max_completion_length: 192

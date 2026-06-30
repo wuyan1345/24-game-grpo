@@ -1,0 +1,34 @@
+model_name: Qwen/Qwen2.5-1.5B-Instruct
+train_path: data/processed/sft_solver_train.jsonl
+output_dir: outputs/final/solver-sft-lora
+torch_dtype: float32
+max_steps: 100
+learning_rate: 1.0e-4
+weight_decay: 0.0
+warmup_ratio: 0.03
+lr_scheduler_type: cosine
+logging_steps: 10
+save_steps: 100
+num_train_epochs: 1
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 1
+max_length: 384
+bf16: false
+fp16: false
+gradient_checkpointing: false
+optim: adamw_torch
+report_to:
+  - none
+lora:
+  enabled: true
+  r: 32
+  alpha: 64
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj

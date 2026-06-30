@@ -38,7 +38,7 @@ def test_normalize_tot_row_parses_percentage() -> None:
     assert record.metadata["solved_rate"] == 0.805
 
 
-def test_prepare_splits_keeps_all_nlile_solvable_and_tracks_remaining_tot_nonoverlap() -> None:
+def test_prepare_splits_builds_id_holdout_and_tot_splits() -> None:
     nlile_records = [
         normalize_nlile_row(
             {
@@ -63,18 +63,28 @@ def test_prepare_splits_keeps_all_nlile_solvable_and_tracks_remaining_tot_nonove
         ),
     ]
     tot_records = [
-        normalize_tot_row({"Rank": 1, "Puzzles": "1 1 2 6", "Solved rate": "99.2%"}),
-        normalize_tot_row({"Rank": 2, "Puzzles": "4 4 10 10", "Solved rate": "85.0%"}),
+        normalize_tot_row({"Rank": 101, "Puzzles": "1 1 2 6", "Solved rate": "99.2%"}),
+        normalize_tot_row({"Rank": 901, "Puzzles": "4 4 10 10", "Solved rate": "85.0%"}),
+        normalize_tot_row({"Rank": 102, "Puzzles": "1 3 4 6", "Solved rate": "75.0%"}),
     ]
-    splits = prepare_splits(nlile_records, tot_records, hard_start_index=1, hard_end_index=2)
-    train_keys = {record.puzzle_key for record in splits["train"]}
-    eval_keys = {record.puzzle_key for record in splits["eval"]}
-    nonoverlap_keys = {record.puzzle_key for record in splits["tot_nonoverlap"]}
-    assert canonical_key([4, 4, 10, 10]) in eval_keys
-    assert canonical_key([1, 1, 2, 6]) in train_keys
-    assert canonical_key([4, 4, 10, 10]) in train_keys
-    assert canonical_key([1, 1, 2, 6]) not in nonoverlap_keys
-    assert canonical_key([4, 4, 10, 10]) not in nonoverlap_keys
+    splits = prepare_splits(
+        nlile_records,
+        tot_records,
+        hard_start_index=1,
+        hard_end_index=2,
+        min_unsolvable_eval_size=1,
+        non_easy_size=1,
+    )
+    train_keys = {record.puzzle_key for record in splits["id_train"]}
+    test_keys = {record.puzzle_key for record in splits["id_test"]}
+    non_easy_keys = {record.puzzle_key for record in splits["tot_non_easy"]}
+    hard_keys = {record.puzzle_key for record in splits["tot_hard"]}
+    assert len(train_keys) == 1
+    assert len(test_keys) == 1
+    assert canonical_key([4, 4, 10, 10]) in hard_keys
+    assert non_easy_keys
+    assert non_easy_keys.isdisjoint(train_keys)
+    assert non_easy_keys.isdisjoint(hard_keys)
 
 
 def test_prepare_splits_generates_unsolvable_fallback_when_source_has_too_few() -> None:
@@ -117,7 +127,8 @@ def test_split_generated_records_holds_out_eval_subset_deterministically() -> No
         normalize_nlile_row({"numbers": [3, 3, 8, 8], "solutions": [], "solvable": False}),
     ]
     splits = split_generated_records(records, eval_size=2, seed=123)
-    assert len(splits["train"]) == 1
-    assert len(splits["eval"]) == 2
+    assert len(splits["id_train"]) == 1
+    assert len(splits["id_test"]) == 2
     assert len(splits["unsolvable_eval"]) == 1
-    assert splits["tot_nonoverlap"] == []
+    assert splits["tot_non_easy"] == []
+    assert splits["tot_hard"] == []

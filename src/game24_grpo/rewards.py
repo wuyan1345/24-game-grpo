@@ -19,6 +19,7 @@ class RewardConfig:
     proximity_weight: float = 0.15
     correct_weight: float = 2.0
     number_mismatch_penalty: float = -1.0
+    missing_answer_penalty: float = 0.0
 
 
 class Game24Reward:
@@ -39,6 +40,10 @@ class Game24Reward:
                 score += self.config.format_weight
 
             verification = verify_completion(completion, puzzle_numbers)
+            if not verification.has_answer_tag:
+                score += self.config.missing_answer_penalty
+                rewards.append(score)
+                continue
             if verification.has_answer_tag and not verification.used_numbers_match:
                 score += self.config.number_mismatch_penalty
                 rewards.append(score)

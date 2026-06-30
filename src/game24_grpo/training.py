@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 from trl import GRPOConfig, GRPOTrainer
-from transformers import AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from game24_grpo.config import DataConfig, TrainConfig
 from game24_grpo.data import load_jsonl_dataset
@@ -39,15 +41,49 @@ def _build_peft_config(train_config: TrainConfig):
     )
 
 
+def _load_policy_model(train_config: TrainConfig, torch_dtype: torch.dtype | None):
+    model_path = Path(train_config.model_name)
+    adapter_config_path = model_path / "adapter_config.json"
+    if not adapter_config_path.exists():
+        return train_config.model_name
+
+    try:
+        from peft import PeftConfig, PeftModel
+    except ImportError as exc:
+        raise ImportError("Continuing GRPO from a LoRA adapter requires 'peft'.") from exc
+
+    peft_config = PeftConfig.from_pretrained(train_config.model_name)
+    model_kwargs = {"trust_remote_code": True}
+    if torch_dtype is not None:
+        model_kwargs["torch_dtype"] = torch_dtype
+    base_model = AutoModelForCausalLM.from_pretrained(
+        peft_config.base_model_name_or_path,
+        **model_kwargs,
+    )
+    return PeftModel.from_pretrained(base_model, train_config.model_name, is_trainable=True)
+
+
+def _resolve_tokenizer_name(model_name: str) -> str:
+    adapter_config_path = Path(model_name) / "adapter_config.json"
+    if not adapter_config_path.exists():
+        return model_name
+    try:
+        from peft import PeftConfig
+    except ImportError as exc:
+        raise ImportError("Loading tokenizer for a LoRA adapter requires 'peft'.") from exc
+    return PeftConfig.from_pretrained(model_name).base_model_name_or_path
+
+
 def build_trainer(train_config: TrainConfig, data_config: DataConfig) -> GRPOTrainer:
     print(f"[train] loading train dataset: {data_config.train_path}")
     dataset = load_jsonl_dataset(data_config.train_path, data_config.prompt_template)
     if train_config.train_limit is not None:
         dataset = dataset.select(range(min(train_config.train_limit, len(dataset))))
     print(f"[train] train dataset ready: {len(dataset)} rows")
-    print(f"[train] loading tokenizer: {train_config.model_name}")
+    tokenizer_name = _resolve_tokenizer_name(train_config.model_name)
+    print(f"[train] loading tokenizer: {tokenizer_name}")
     tokenizer = AutoTokenizer.from_pretrained(
-        train_config.model_name,
+        tokenizer_name,
         trust_remote_code=True,
     )
     if tokenizer.pad_token is None:
@@ -59,12 +95,14 @@ def build_trainer(train_config: TrainConfig, data_config: DataConfig) -> GRPOTra
             proximity_weight=train_config.reward_weights.proximity,
             correct_weight=train_config.reward_weights.correct,
             number_mismatch_penalty=train_config.reward_weights.number_mismatch_penalty,
+            missing_answer_penalty=train_config.reward_weights.missing_answer_penalty,
         )
     )
     print("[train] building GRPO config")
-    model_init_kwargs = {}
     torch_dtype = _resolve_torch_dtype(train_config.torch_dtype)
-    if torch_dtype is not None:
+    model = _load_policy_model(train_config, torch_dtype)
+    model_init_kwargs = {}
+    if isinstance(model, str) and torch_dtype is not None:
         model_init_kwargs["torch_dtype"] = torch_dtype
 
     trainer_kwargs = {
@@ -98,7 +136,7 @@ def build_trainer(train_config: TrainConfig, data_config: DataConfig) -> GRPOTra
     trainer_config = GRPOConfig(
         **{key: value for key, value in trainer_kwargs.items() if key in supported_fields}
     )
-    peft_config = _build_peft_config(train_config)
+    peft_config = None if not isinstance(model, str) else _build_peft_config(train_config)
     if peft_config is not None:
         print(
             "[train] using LoRA: "
@@ -107,7 +145,7 @@ def build_trainer(train_config: TrainConfig, data_config: DataConfig) -> GRPOTra
         )
     print("[train] instantiating GRPO trainer")
     return GRPOTrainer(
-        model=train_config.model_name,
+        model=model,
         reward_funcs=reward,
         args=trainer_config,
         train_dataset=dataset,

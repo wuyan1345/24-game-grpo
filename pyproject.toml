@@ -29,6 +29,8 @@ dev = [
 game24-build-data = "game24_grpo.cli.build_data:main"
 game24-eval = "game24_grpo.cli.evaluate:main"
 game24-train = "game24_grpo.cli.train_grpo:main"
+game24-build-sft = "game24_grpo.cli.build_sft_data:main"
+game24-train-sft = "game24_grpo.cli.train_sft:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

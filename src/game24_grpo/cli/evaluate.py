@@ -12,8 +12,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run baseline evaluation for a 24-game model.")
     parser.add_argument("--model", required=True, help="Model name or local path.")
     parser.add_argument("--data-config", required=True, help="Path to the data config YAML.")
-    parser.add_argument("--split", choices=["eval", "unsolvable_eval"], default="eval")
+    parser.add_argument(
+        "--split",
+        choices=[
+            "train",
+            "eval",
+            "id_train",
+            "id_test",
+            "tot_non_easy",
+            "tot_hard",
+            "unsolvable_eval",
+            "tot_nonoverlap",
+        ],
+        default="id_test",
+    )
     parser.add_argument("--limit", type=int, help="Optional number of examples to evaluate.")
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Optional starting row offset within the selected split.",
+    )
     parser.add_argument("--output", help="Optional path to save detailed JSON results.")
     parser.add_argument(
         "--output-dir",
@@ -54,6 +73,7 @@ def main() -> None:
         help="Mark the evaluated model as trained in result metadata.",
     )
     parser.add_argument("--checkpoint", help="Checkpoint path or identifier for result metadata.")
+    parser.add_argument("--reward-variant", default="none")
     parser.add_argument("--overlap-filter", default="")
     parser.add_argument("--difficulty-filter", default="")
     parser.add_argument("--notes", default="")
@@ -61,16 +81,22 @@ def main() -> None:
     print(f"[evaluate] loading data config: {args.data_config}")
 
     data_config = load_data_config(args.data_config)
-    dataset_path = (
-        data_config.eval_path
-        if args.split == "eval"
-        else data_config.unsolvable_eval_path
-    )
+    dataset_paths = {
+        "train": data_config.train_path,
+        "eval": data_config.eval_path,
+        "id_train": data_config.id_train_path or data_config.train_path,
+        "id_test": data_config.id_test_path or data_config.eval_path,
+        "tot_non_easy": data_config.tot_non_easy_path or data_config.tot_nonoverlap_path,
+        "tot_hard": data_config.tot_hard_path,
+        "unsolvable_eval": data_config.unsolvable_eval_path,
+        "tot_nonoverlap": data_config.tot_nonoverlap_path,
+    }
+    dataset_path = dataset_paths[args.split]
     if dataset_path is None:
         raise ValueError(f"split {args.split} is not configured")
     print(
         f"[evaluate] starting evaluation: split={args.split}, model={args.model}, "
-        f"dataset={dataset_path}, limit={args.limit or 'all'}"
+        f"dataset={dataset_path}, offset={args.offset}, limit={args.limit or 'all'}"
     )
     output_path = args.output
     if output_path is None:
@@ -84,6 +110,7 @@ def main() -> None:
         split=args.split,
         max_new_tokens=args.max_new_tokens or data_config.max_completion_length,
         limit=args.limit,
+        offset=args.offset,
         output_path=output_path,
         experiment_id=args.experiment_id,
         dtype=args.dtype,
@@ -93,6 +120,7 @@ def main() -> None:
         baseline_type=args.baseline_type,
         trained=args.trained,
         checkpoint=args.checkpoint,
+        reward_variant=args.reward_variant,
         overlap_filter=args.overlap_filter,
         difficulty_filter=args.difficulty_filter,
         notes=args.notes,

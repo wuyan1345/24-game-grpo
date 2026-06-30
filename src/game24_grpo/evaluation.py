@@ -108,6 +108,7 @@ def evaluate_model(
     split: str,
     max_new_tokens: int = 192,
     limit: int | None = None,
+    offset: int = 0,
     output_path: str | None = None,
     experiment_id: str = "eval",
     dtype: str = "auto",
@@ -117,6 +118,7 @@ def evaluate_model(
     baseline_type: str = "untrained_qwen",
     trained: bool = False,
     checkpoint: str | None = None,
+    reward_variant: str = "none",
     overlap_filter: str = "",
     difficulty_filter: str = "",
     notes: str = "",
@@ -125,12 +127,19 @@ def evaluate_model(
         raise ValueError("num_samples must be at least 1")
     if num_samples > 1 and (temperature is None or temperature <= 0):
         raise ValueError("num_samples > 1 requires sampling with --temperature > 0")
+    if offset < 0:
+        raise ValueError("offset must be non-negative")
+    if limit is not None and limit < 0:
+        raise ValueError("limit must be non-negative")
 
     print(f"[evaluate] loading dataset: {dataset_path}")
     dataset = load_jsonl_dataset(dataset_path, prompt_template)
-    if limit is not None:
-        dataset = dataset.select(range(min(limit, len(dataset))))
-    print(f"[evaluate] dataset ready: {len(dataset)} rows")
+    dataset_size = len(dataset)
+    end = dataset_size if limit is None else min(offset + limit, dataset_size)
+    if offset > dataset_size:
+        offset = dataset_size
+    dataset = dataset.select(range(offset, end))
+    print(f"[evaluate] dataset ready: {len(dataset)} rows from offset={offset}")
 
     tokenizer_name = _resolve_tokenizer_name(model_name)
     print(f"[evaluate] loading tokenizer: {tokenizer_name}")
@@ -153,6 +162,7 @@ def evaluate_model(
     unsolvable_false_positives = 0
     rows: list[dict[str, Any]] = []
     for index, row in enumerate(dataset, start=1):
+        source_index = offset + index - 1
         inputs = _prepare_model_inputs(row["prompt"], tokenizer, device)
         do_sample = temperature is not None and temperature > 0
         generation_kwargs: dict[str, Any] = {
@@ -193,11 +203,15 @@ def evaluate_model(
         )
         rows.append(
             {
-                "index": index - 1,
+                "index": source_index,
+                "local_index": index - 1,
                 "numbers": row["numbers"],
                 "solvable": row["solvable"],
                 "target": row["target"],
-                "hard": split == "eval",
+                "source": row.get("source", ""),
+                "puzzle_key": row.get("puzzle_key", ""),
+                "metadata": row.get("metadata", {}),
+                "hard": split == "tot_hard" or row.get("metadata", {}).get("rank") in range(901, 1001),
                 "selected_sample": selected_index,
                 "raw_model_output": completion,
                 "extracted_answer": verification.answer_text,
@@ -258,11 +272,12 @@ def evaluate_model(
             "trained": trained,
             "dataset": dataset_path,
             "split": split,
+            "dataset_offset": offset,
             "overlap_filter": overlap_filter,
             "difficulty_filter": difficulty_filter,
             "num_examples": total,
             "prompt_variant": "configs/data prompt_template",
-            "reward_variant": "none",
+            "reward_variant": reward_variant,
             "generation_config": {
                 "temperature": temperature,
                 "top_p": top_p,
@@ -270,6 +285,7 @@ def evaluate_model(
                 "max_new_tokens": max_new_tokens,
                 "do_sample": temperature is not None and temperature > 0,
                 "dtype": str(torch_dtype).replace("torch.", ""),
+                "offset": offset,
             },
             "device": device,
             "metrics": {

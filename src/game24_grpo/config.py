@@ -25,6 +25,7 @@ class DataConfig:
     eval_path: str
     unsolvable_eval_path: str | None = None
     tot_nonoverlap_path: str | None = None
+    tot_easy100_path: str | None = None
     id_train_path: str | None = None
     id_test_path: str | None = None
     tot_non_easy_path: str | None = None

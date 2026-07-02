@@ -1,5 +1,5 @@
-model_name: outputs/final/solver-sft-lora
-output_dir: outputs/final/solver-sft-soft-grpo-100
+model_name: outputs/easy100/solver-sft-4epoch-uns50-r64-lr5e5-lora
+output_dir: outputs/easy100/solver-sft4-uns50-r64-lr5e5-soft-grpo-100
 reward_variant: soft
 bf16: false
 fp16: false

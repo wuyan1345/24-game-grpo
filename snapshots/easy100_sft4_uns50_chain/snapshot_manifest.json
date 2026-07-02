@@ -1,0 +1,129 @@
+{
+  "snapshot_id": "easy100_sft4_uns50_chain",
+  "timestamp": "2026-07-01T02:20:00+08:00",
+  "remote_host": "nlp",
+  "remote_repo": "/home/ma-user/work/24-game-grpo",
+  "dataset": {
+    "split": "tot_easy100",
+    "num_examples": 100,
+    "overlap_filter": "ToT ranks 1-100 easy slice; auxiliary easy100"
+  },
+  "policy": {
+    "backbone": "Qwen/Qwen2.5-1.5B-Instruct",
+    "decode_samples": [1, 8],
+    "do_not_run": ["best-of-12"]
+  },
+  "checkpoints": [
+    {
+      "role": "selected_sft_base",
+      "path": "outputs/easy100/solver-sft-4epoch-uns50-r64-lr5e5-lora",
+      "remote_size": "4.5G",
+      "notes": "4 epochs, sft_solver_train.jsonl, LoRA r64 alpha128, lr 5e-5"
+    },
+    {
+      "role": "best_chain_checkpoint",
+      "path": "outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-100/checkpoint-100",
+      "remote_size": "861M",
+      "notes": "100-step hard GRPO from selected SFT; best easy100 b8 result"
+    },
+    {
+      "role": "rejected_soft_grpo",
+      "path": "outputs/easy100/solver-sft4-uns50-r64-lr5e5-soft-grpo-100/checkpoint-100",
+      "remote_size": "861M",
+      "notes": "Collapsed to NO_SOLUTION on all easy100 rows"
+    },
+    {
+      "role": "secondary_low_lr_hard_grpo",
+      "path": "outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-lr8e7-100/checkpoint-100",
+      "remote_size": "861M",
+      "notes": "100-step hard GRPO, lr 8e-7, max completion 96"
+    }
+  ],
+  "results": [
+    {
+      "file": "20260630_230321_easy100_sft4_uns50_r64_lr5e5_bestof1.json",
+      "model": "SFT 4epoch uns50 r64 lr5e-5",
+      "num_samples": 1,
+      "solved_rate": 0.20,
+      "format_valid_rate": 0.92,
+      "expression_valid_rate": 0.66,
+      "number_use_valid_rate": 0.66,
+      "value_correct_rate": 0.20
+    },
+    {
+      "file": "20260630_230924_easy100_sft4_uns50_r64_lr5e5_bestof8_t07.json",
+      "model": "SFT 4epoch uns50 r64 lr5e-5",
+      "num_samples": 8,
+      "solved_rate": 0.50,
+      "format_valid_rate": 0.88,
+      "expression_valid_rate": 0.71,
+      "number_use_valid_rate": 0.71,
+      "value_correct_rate": 0.50
+    },
+    {
+      "file": "20260701_001327_easy100_sft4_uns50_hard_grpo100_bestof1.json",
+      "model": "SFT4-uns50 hard GRPO 100",
+      "num_samples": 1,
+      "solved_rate": 0.27,
+      "format_valid_rate": 1.00,
+      "expression_valid_rate": 0.77,
+      "number_use_valid_rate": 0.77,
+      "value_correct_rate": 0.27
+    },
+    {
+      "file": "20260701_001858_easy100_sft4_uns50_hard_grpo100_bestof8_t07.json",
+      "model": "SFT4-uns50 hard GRPO 100",
+      "num_samples": 8,
+      "solved_rate": 0.57,
+      "format_valid_rate": 0.99,
+      "expression_valid_rate": 0.76,
+      "number_use_valid_rate": 0.76,
+      "value_correct_rate": 0.57
+    },
+    {
+      "file": "20260701_002735_easy100_sft4_uns50_soft_grpo100_bestof1.json",
+      "model": "SFT4-uns50 soft GRPO 100",
+      "num_samples": 1,
+      "solved_rate": 0.00,
+      "format_valid_rate": 1.00,
+      "expression_valid_rate": 0.00,
+      "number_use_valid_rate": 0.00,
+      "value_correct_rate": 0.00
+    },
+    {
+      "file": "20260701_003339_easy100_sft4_uns50_soft_grpo100_bestof8_t07.json",
+      "model": "SFT4-uns50 soft GRPO 100",
+      "num_samples": 8,
+      "solved_rate": 0.00,
+      "format_valid_rate": 1.00,
+      "expression_valid_rate": 0.00,
+      "number_use_valid_rate": 0.00,
+      "value_correct_rate": 0.00
+    },
+    {
+      "file": "20260701_004140_easy100_sft4_uns50_hard_grpo_lr8e7_100_bestof1.json",
+      "model": "SFT4-uns50 hard GRPO lr8e-7 100",
+      "num_samples": 1,
+      "solved_rate": 0.19,
+      "format_valid_rate": 0.92,
+      "expression_valid_rate": 0.66,
+      "number_use_valid_rate": 0.66,
+      "value_correct_rate": 0.19
+    },
+    {
+      "file": "20260701_004803_easy100_sft4_uns50_hard_grpo_lr8e7_100_bestof8_t07.json",
+      "model": "SFT4-uns50 hard GRPO lr8e-7 100",
+      "num_samples": 8,
+      "solved_rate": 0.53,
+      "format_valid_rate": 0.93,
+      "expression_valid_rate": 0.71,
+      "number_use_valid_rate": 0.71,
+      "value_correct_rate": 0.53
+    }
+  ],
+  "decision": {
+    "best_checkpoint": "outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-100/checkpoint-100",
+    "best_metric": "tot_easy100 best-of-8 solved_rate",
+    "best_value": 0.57
+  }
+}

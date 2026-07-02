@@ -102,3 +102,46 @@ outputs/results/<YYYYMMDD_HHMMSS>_<experiment_id>.json
 Each JSON includes generation config, split/filter notes, aggregate metrics, and
 per-example verifier details. Update `/home/wuyan/study/nlp/final/logs.md` after
 each training or evaluation batch.
+
+## Easy100 SFT4-Uns50 Snapshot
+
+Current focused easy100 snapshot:
+
+```text
+snapshots/easy100_sft4_uns50_chain/
+```
+
+This snapshot preserves the result JSON files, checkpoint paths, commands, and
+analysis for the chain:
+
+```text
+Qwen/Qwen2.5-1.5B-Instruct
+  -> SFT 4epoch uns50 r64 lr5e-5
+  -> hard / soft / low-lr-hard GRPO 100-step variants
+  -> tot_easy100 b1 and b8 evaluation
+```
+
+Checkpoint summary:
+
+| Role | Remote path | Decision |
+|---|---|---|
+| Selected SFT base | `outputs/easy100/solver-sft-4epoch-uns50-r64-lr5e5-lora` | SFT-only baseline. |
+| Best chain checkpoint | `outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-100/checkpoint-100` | Use this for current easy100 results. |
+| Rejected soft GRPO | `outputs/easy100/solver-sft4-uns50-r64-lr5e5-soft-grpo-100/checkpoint-100` | Collapsed to `NO_SOLUTION` on solvable easy100. |
+| Secondary hard variant | `outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-lr8e7-100/checkpoint-100` | Stable but weaker than standard hard GRPO. |
+
+Main easy100 metrics:
+
+| Model | b1 solved | b8 solved | Notes |
+|---|---:|---:|---|
+| SFT 4epoch uns50 r64 lr5e-5 | 0.20 | 0.50 | Selected SFT-only base. |
+| SFT4-uns50 hard GRPO 100 | 0.27 | 0.57 | Best current checkpoint in this chain. |
+| SFT4-uns50 soft GRPO 100 | 0.00 | 0.00 | Invalid: outputs `NO_SOLUTION` for all easy100 rows. |
+| SFT4-uns50 hard GRPO lr8e-7 100 | 0.19 | 0.53 | Below standard hard GRPO. |
+
+The exact result records are stored in both:
+
+```text
+outputs/results/
+snapshots/easy100_sft4_uns50_chain/
+```

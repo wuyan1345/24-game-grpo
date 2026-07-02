@@ -1,14 +1,14 @@
 model_name: outputs/easy100/solver-sft-4epoch-uns50-r64-lr5e5-lora
-output_dir: outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-100
+output_dir: outputs/easy100/solver-sft4-uns50-r64-lr5e5-hard-grpo-lr8e7-100
 reward_variant: hard
 bf16: false
 fp16: false
 gradient_checkpointing: false
 torch_dtype: float32
 max_steps: 100
-learning_rate: 3.0e-5
+learning_rate: 8.0e-7
 weight_decay: 0.0
-warmup_ratio: 0.03
+warmup_ratio: 0.0
 lr_scheduler_type: cosine
 logging_steps: 1
 save_steps: 100
@@ -19,9 +19,9 @@ gradient_accumulation_steps: 1
 num_generations: 4
 generation_batch_size: 2
 max_prompt_length: 256
-max_completion_length: 64
+max_completion_length: 96
 beta: 0.04
-temperature: 0.8
+temperature: 0.9
 top_p: 0.95
 optim: adamw_torch
 report_to:
